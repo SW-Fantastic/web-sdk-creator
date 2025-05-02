@@ -291,6 +291,8 @@ public class OpenAPIImportController extends ViewController<OpenAPIImportView> {
 
     @FXML
     public void close() {
+        this.doImport = false;
+        this.loaded = Collections.emptyList();
         getView().hide();
     }
 

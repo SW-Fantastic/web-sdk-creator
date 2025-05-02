@@ -17,6 +17,7 @@ module swdc.sdkdev {
     requires reactfx;
     requires org.fxmisc.flowless;
     requires swagger.parser.v3;
+    requires org.apache.commons.lang3;
 
     requires java.compiler;
     requires swagger.parser.core;
