@@ -148,23 +148,36 @@ public class Client {
 
         Field[] fields = param.getClass().getDeclaredFields();
         Map<String,Object> params = new HashMap<>();
+        Map<String,String> headers = new HashMap<>();
         for (Field field: fields) {
 
             WebParam property = field.getAnnotation(WebParam.class);
-            if (property == null) {
-                continue;
+            if (property != null) {
+                try {
+                    field.setAccessible(true);
+                    params.put(property.value(),field.get(param));
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
             }
-            try {
-                field.setAccessible(true);
-                params.put(property.value(),field.get(param));
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+
+            RequestHeader header = field.getAnnotation(RequestHeader.class);
+            if(header != null) {
+                try {
+                    field.setAccessible(true);
+                    headers.put(header.value(),(String)field.get(param));
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
             }
 
         }
 
         String requestUrl = buildRequestUrl(params,url);
         HttpUriRequest request = createRequest(method.toUpperCase(),requestUrl);
+        for(String header: headers.keySet()) {
+            request.addHeader(header, headers.get(header));
+        }
 
         if (request instanceof HttpEntityEnclosingRequestBase) {
             HttpEntityEnclosingRequestBase entityRequest = (HttpEntityEnclosingRequestBase) request;
@@ -193,7 +206,7 @@ public class Client {
             StatusLine statusLine = response.getStatusLine();
             HttpEntity entity = response.getEntity();
 
-            if (statusLine.getStatusCode() != 200) {
+            if (statusLine.getStatusCode() < 200 && statusLine.getStatusCode() > 299) {
                 if (statusLine.getStatusCode() == 404) {
                     return null;
                 }

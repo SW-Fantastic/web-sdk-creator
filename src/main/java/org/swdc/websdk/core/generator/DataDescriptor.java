@@ -55,6 +55,11 @@ public class DataDescriptor {
      */
     private Map<String,String> fieldParamMap = new HashMap<>();
 
+    /**
+     * Http头
+     */
+    private Map<String,String> webHeaders = new HashMap<>();
+
 
     /**
      * 导入列表
@@ -173,6 +178,16 @@ public class DataDescriptor {
         fieldParamMap.put(field,type);
         String fieldName =  field.replaceAll("[^a-zA-Z0-9]", "");
         fieldNameMap.put(field,fieldName);
+    }
+
+    public void addHeader(String key, String value) {
+        webHeaders.put(key,value);
+        String fieldName =  key.replaceAll("[^a-zA-Z0-9]", "");
+        fieldNameMap.put(key,fieldName);
+    }
+
+    public Map<String, String> getWebHeaders() {
+        return webHeaders;
     }
 
     public Map<String, String> getFieldClassMap() {

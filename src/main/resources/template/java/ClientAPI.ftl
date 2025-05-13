@@ -46,6 +46,9 @@ public class ${className} {
     }
 
     </#list>
+    public Client sender() {
+        return this.baseApiClient;
+    }
 
 
 }

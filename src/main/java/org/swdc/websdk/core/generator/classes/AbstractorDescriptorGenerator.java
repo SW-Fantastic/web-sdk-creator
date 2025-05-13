@@ -32,6 +32,11 @@ public abstract class AbstractorDescriptorGenerator<T> {
             dds.addParamField(pathVar.getName(),pathVar.getType().getSimpleName());
         }
 
+        List<HttpHeader> headers = endpoint.getHeaders();
+        for (HttpHeader httpHeader : headers) {
+            dds.addHeader(httpHeader.getHeader(), httpHeader.getValue());
+        }
+
         dds.addImport(JsonIgnore.class);
         dds.addImport(JsonProperty.class);
         dds.addImport(JsonInclude.class);

@@ -33,7 +33,7 @@ public class HttpEditableCell<T> extends TableCell<T,String> {
             e.consume();
         });
         field.focusedProperty().addListener(e -> {
-            if (!field.isFocused()) {
+            if (!field.isFocused() && this.isEditing()) {
                 commitEdit(field.getText());
             }
         });

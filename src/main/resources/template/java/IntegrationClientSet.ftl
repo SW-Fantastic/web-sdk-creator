@@ -6,6 +6,7 @@ import ${importItem};
 
 import ${basePackageName}.Client;
 import ${basePackageName}.WebParam;
+import ${basePackageName}.RequestHeader;
 
 public class ${className} {
 

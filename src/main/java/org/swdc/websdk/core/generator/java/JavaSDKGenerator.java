@@ -78,6 +78,15 @@ public class JavaSDKGenerator implements SDKGenerator {
                 "Pom.ftl"
         );
 
+        File webHeaderSource = new File(sourceRoot.getAbsolutePath(),"RequestHeader.java");
+        FileUtil.generateAndWrite(
+                template,
+                webHeaderSource,
+                Map.of("basePackageName", project.getPackageName()),
+                "RequestHeader.ftl"
+        );
+        sourceClasses.add(webHeaderSource);
+
         File webParamSource = new File(sourceRoot.getAbsolutePath(),"WebParam.java");
         FileUtil.generateAndWrite(
                 template,

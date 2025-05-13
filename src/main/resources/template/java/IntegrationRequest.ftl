@@ -24,6 +24,13 @@
         private ${fieldParamMap[fieldKey]} ${fieldNameMap[fieldKey]};
 
         </#list>
+
+        <#list webHeaders.keySet() as fieldKey>
+        @JsonIgnore
+        @RequestHeader("${fieldKey}")
+        private String ${fieldNameMap[fieldKey]} = "${webHeaders[fieldKey]}";
+
+        </#list>
         </#if>
 
         <#list fieldClassMap.keySet() as fieldKey>
@@ -37,6 +44,14 @@
         <#if sender>
         <#list fieldParamMap.keySet() as fieldKey>
         public ${className} ${fieldNameMap[fieldKey]}(${fieldParamMap[fieldKey]} ${fieldNameMap[fieldKey]}) {
+            this.${fieldNameMap[fieldKey]} = ${fieldNameMap[fieldKey]};
+            return this;
+        }
+
+        </#list>
+
+        <#list webHeaders.keySet() as fieldKey>
+        public ${className} ${fieldNameMap[fieldKey]}(String ${fieldNameMap[fieldKey]}) {
             this.${fieldNameMap[fieldKey]} = ${fieldNameMap[fieldKey]};
             return this;
         }

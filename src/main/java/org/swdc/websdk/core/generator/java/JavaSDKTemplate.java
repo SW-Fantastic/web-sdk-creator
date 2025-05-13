@@ -28,6 +28,7 @@ public class JavaSDKTemplate {
         loadTemplate(templateLoader,"Response.ftl");
         loadTemplate(templateLoader,"IntegrationClientSet.ftl");
         loadTemplate(templateLoader,"IntegrationRequest.ftl");
+        loadTemplate(templateLoader,"RequestHeader.ftl");
 
         configuration = new Configuration(Configuration.VERSION_2_3_21);
         configuration.setObjectWrapper(new BeansWrapper(Configuration.VERSION_2_3_21));
