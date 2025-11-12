@@ -1,3 +1,4 @@
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class ${className} <#if superClass??>extends ${superClass}</#if> {
 
         <#if sender>

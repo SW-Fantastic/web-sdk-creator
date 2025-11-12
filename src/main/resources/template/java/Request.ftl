@@ -8,7 +8,9 @@ import ${importItem};
 import ${basePackageName}.Client;
 import ${basePackageName}.WebParam;
 import ${basePackageName}.RequestHeader;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ${className} <#if superClass??>extends ${superClass}</#if> {
 
 

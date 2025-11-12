@@ -167,7 +167,7 @@ public class JavaSDKGenerator implements SDKGenerator {
 
                     String clazzName = endpoint.getName();
                     clazzName = clazzName.substring(0,1).toUpperCase() + clazzName.substring(1);
-                    String responseName = clazzName + "Response";
+                    String responseName = clazzName + "Data";
 
                     if (endpoint.getResponseBodyView() == ResponseBodyBlankView.class) {
                         responseName = "Void";

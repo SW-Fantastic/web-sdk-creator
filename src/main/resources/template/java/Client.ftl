@@ -7,6 +7,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.StatusLine;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.*;
 import org.apache.http.config.Registry;
@@ -15,6 +16,7 @@ import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
@@ -50,7 +52,7 @@ public class Client {
 
     private String baseUrl;
 
-    private HttpClient client = null;
+    private CloseableHttpClient client = null;
 
     private ObjectMapper mapper;
 
@@ -65,9 +67,15 @@ public class Client {
         this.mapper = new ObjectMapper();
         this.mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
+        RequestConfig config = RequestConfig.copy(RequestConfig.DEFAULT)
+                .setConnectTimeout(1000 * 15)
+                .setSocketTimeout(1000 * 15)
+                .build();
+
         this.client = HttpClientBuilder.create()
-                        .setRetryHandler(this::retryHandler)
-                        .build();
+                .setRetryHandler(this::retryHandler)
+                .setDefaultRequestConfig(config)
+                .build();
 
         if(this.baseUrl.endsWith("/")) {
             this.baseUrl = this.baseUrl.substring(0,this.baseUrl.length() - 1);
@@ -134,7 +142,13 @@ public class Client {
                     factoryRegistry
             );
 
+            RequestConfig config = RequestConfig.copy(RequestConfig.DEFAULT)
+                    .setConnectTimeout(1000 * 15)
+                    .setSocketTimeout(1000 * 15)
+                    .build();
+
             this.client = HttpClientBuilder.create()
+                    .setDefaultRequestConfig(config)
                     .setConnectionManager(connMgr)
                     .setRetryHandler(this::retryHandler)
                     .build();
@@ -202,30 +216,36 @@ public class Client {
 
         try {
             cred.initialize(request);
-            HttpResponse response = client.execute(request);
-            StatusLine statusLine = response.getStatusLine();
-            HttpEntity entity = response.getEntity();
+            CloseableHttpResponse response = client.execute(request);
+            try {
 
-            if (statusLine.getStatusCode() < 200 && statusLine.getStatusCode() > 299) {
-                if (statusLine.getStatusCode() == 404) {
+                StatusLine statusLine = response.getStatusLine();
+                HttpEntity entity = response.getEntity();
+                if (statusLine.getStatusCode() < 200 && statusLine.getStatusCode() > 299) {
+                    if (statusLine.getStatusCode() == 404) {
+                        return null;
+                    }
+                    String content = "";
+                    if (entity.getContent() != null) {
+                        content = new String(readAllBytes(entity.getContent()), UTF_8);
+                    }
+                    throw new RuntimeException(statusLine.getStatusCode() + " " + content);
+                }
+
+                if (entity == null) {
                     return null;
                 }
-                String content = "";
-                if (entity.getContent() != null) {
-                    content = new String(readAllBytes(entity.getContent()), UTF_8);
+                if (responseType == Void.class) {
+                    return null;
                 }
-                throw new RuntimeException(statusLine.getStatusCode() + " " + content);
+                return mapper.readValue(
+                        entity.getContent(),responseType
+                );
+
+            } finally {
+                response.close();
             }
 
-            if (entity == null) {
-                return null;
-            }
-            if (responseType == Void.class) {
-                return null;
-            }
-            return mapper.readValue(
-                    entity.getContent(),responseType
-            );
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
