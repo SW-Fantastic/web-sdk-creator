@@ -10,9 +10,9 @@ import org.swdc.websdk.core.HttpEndpoint;
 import org.swdc.websdk.core.HttpEndpoints;
 import org.swdc.websdk.core.SDKProject;
 import org.swdc.websdk.core.generator.*;
-import org.swdc.websdk.core.generator.classes.BlankDescriptorGenerator;
-import org.swdc.websdk.core.generator.classes.JsonDescriptorGenerator;
-import org.swdc.websdk.core.generator.classes.UrlEncodedDescriptorGenerator;
+import org.swdc.websdk.core.generator.classes.BlankClassParser;
+import org.swdc.websdk.core.generator.classes.JsonClassParser;
+import org.swdc.websdk.core.generator.classes.UrlEncodedClassParser;
 import org.swdc.websdk.views.LanguageKeys;
 import org.swdc.websdk.views.events.StatusEvent;
 import org.swdc.websdk.views.requests.*;
@@ -20,9 +20,14 @@ import org.swdc.websdk.views.requests.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.ResourceBundle;
 
 public class JavaSDKGenerator implements SDKGenerator {
+
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     private static final Logger logger = LoggerFactory.getLogger(JavaSDKGenerator.class);
 
@@ -38,8 +43,8 @@ public class JavaSDKGenerator implements SDKGenerator {
         this.emitter = emitter;
     }
 
-
-    public void generate(FXResources resources,SDKProject project) {
+    @Override
+    public void generate(FXResources resources, SDKProject project) {
 
         ResourceBundle bundle = resources.getResourceBundle();
 
@@ -114,13 +119,14 @@ public class JavaSDKGenerator implements SDKGenerator {
         );
         sourceClasses.add(clientSource);
 
-        ClientDescriptor clientDescriptor = new ClientDescriptor(
-                project.getProjectName(),project.getPackageName()
-        );
+        generateSource(resources, sourceRoot, project, sourceClasses);
 
+    }
 
+    private boolean verifyEndpointSets(SDKProject project, ResourceBundle bundle) {
         for (HttpEndpoints set: project.getEndpoints()) {
 
+            emitter.emit(new StatusEvent(bundle.getString(LanguageKeys.VERIFYING) + set.getName()));
             List<String> methodNames = new ArrayList<>();
 
             emitter.emit(new StatusEvent(bundle.getString(LanguageKeys.VERIFYING) + set.getName()));
@@ -129,120 +135,161 @@ public class JavaSDKGenerator implements SDKGenerator {
                     emitter.emit(new StatusEvent(String.format(
                             bundle.getString(LanguageKeys.DLG_VERIFY_NAME_BLANK),endpoint.getUrl()
                     ), 0,true));
-                    return;
+                    return false;
                 }
                 if (endpoint.getUrl() == null || endpoint.getUrl().isBlank()) {
                     emitter.emit(new StatusEvent(String.format(
                             bundle.getString(LanguageKeys.DLG_VERIFY_URL_BLANK),set
                     ), 0,true));
-                    return;
+                    return false;
                 }
                 if (methodNames.contains(endpoint.getName())) {
                     emitter.emit(new StatusEvent(String.format(bundle.getString(LanguageKeys.DLG_VERIFY_NAME_DUPLICATE),endpoint.getName()),0,true));
-                    return;
+                    return false;
                 }
                 methodNames.add(endpoint.getName());
             }
         }
+        return true;
+    }
 
-        for (HttpEndpoints set: project.getEndpoints()) {
+    private void generateSource(FXResources resources, File sourceRoot, SDKProject project, List<File> sources) {
 
-            File setPackage = new File(sourceRoot.getAbsolutePath(), set.getName());
+        ResourceBundle bundle = resources.getResourceBundle();
+        if (!verifyEndpointSets(project, bundle)) {
+            return;
+        }
+
+        ClientDescriptor clientDescriptor = new ClientDescriptor(
+                project.getProjectName(),
+                project.getPackageName()
+        );
+
+        List<DataClassDescriptor> proceed = new ArrayList<>();
+        for (HttpEndpoints endpointSet : project.getEndpoints()) {
+
+
+
+            ClientSetDescriptor setDescriptor = new ClientSetDescriptor(endpointSet.getName(), project.getPackageName());
+            if (project.isMiniumMode()) {
+                setDescriptor = new ClientEndpointSetDescriptor(
+                        endpointSet.getName(), project.getPackageName()
+                );
+            }
+
+            File setPackage = new File(sourceRoot.getAbsolutePath(), endpointSet.getName());
             if (!setPackage.exists()) {
                 setPackage.mkdirs();
             }
 
+            GenerateContext context = generateEndpointSet(project, endpointSet);
+            for (HttpEndpoint endpoint : endpointSet.getEndpoints()) {
 
-            DataDescriptorContext context = new DataDescriptorContext();
+                DataClassDescriptor requestDesc = context.getRequest(endpoint);
+                DataClassDescriptor responseDesc = context.getResponse(endpoint);
+                if (requestDesc == null) {
+                    continue;
+                }
 
-            EndPointSetDescriptor setDescriptor = new EndPointSetDescriptor(set.getName(), project.getPackageName());
+                requestDesc.setClassName(requestDesc.getClassName() + "Req");
+
+                Class viewType = endpoint.getRequestBodyView();
+                String contentType = null;
+                if (viewType == RequestJsonBodyView.class) {
+                    contentType = "application/json";
+                } else if (viewType == RequestFormDataView.class) {
+                    contentType = "application/x-www-form-urlencoded";
+                }
+
+                EndpointRequestScope scope = new EndpointRequestScope(
+                        project.getPackageName(),
+                        endpoint.getMethod().name(),
+                        contentType,
+                        requestDesc,
+                        responseDesc
+                );
+
+                if (project.isMiniumMode()) {
+
+                    String requestSource = template.render("IntegrationRequest.ftl", scope);
+                    ClientEndpointSetDescriptor integratedSet = (ClientEndpointSetDescriptor) setDescriptor;
+                    integratedSet.addRequestorSource(requestSource);
+                    integratedSet.addImports(requestDesc);
+
+                } else {
+
+                    String requestSource = template.render("Request.ftl", scope);
+                    File target = new File(setPackage.getAbsolutePath(), requestDesc.getClassName() + ".java");
+                    try(FileOutputStream fos = new FileOutputStream(target)) {
+                        fos.write(requestSource.getBytes(StandardCharsets.UTF_8));
+                        sources.add(target);
+                    } catch (Exception e) {
+                        logger.error("Failed to write file : ", e);
+                    }
+
+                }
+
+                proceed.add(requestDesc);
+                setDescriptor.addRequest(endpoint.getName(), requestDesc.getClassName());
+
+            }
+
+            List<DataClassDescriptor> classes = context.getClassDescriptors();
+            for (DataClassDescriptor desc : classes) {
+
+                if (proceed.contains(desc)) {
+                    continue;
+                }
+
+                String source = null;
+                if (desc.isSender()) {
+
+                    EndpointRequestScope scope = new EndpointRequestScope(
+                            project.getPackageName(),
+                            null,
+                            null,
+                            desc,
+                            null
+                    );
+                    source = template.render("Request.ftl", scope);
+                    proceed.add(desc);
+
+                } else {
+
+                    EndpointScope scope = new EndpointScope(project.getPackageName(), desc);
+                    source = template.render("Response.ftl", scope);
+                    proceed.add(desc);
+
+                }
+
+                File target = new File(setPackage.getAbsolutePath(), desc.getClassName() + ".java");
+                try(FileOutputStream fos = new FileOutputStream(target)) {
+                    fos.write(source.getBytes(StandardCharsets.UTF_8));
+                    sources.add(target);
+                } catch (Exception e) {
+
+                    logger.error("Failed to write file : ", e);
+                    emitter.emit(new StatusEvent(
+                            String.format(bundle.getString(LanguageKeys.DLG_CANNOT_WRITE_FILE),target.getAbsolutePath()),
+                            0d,true
+                    ));
+                    return;
+
+                }
+
+            }
+
+            String clientSetSource = null;
             if (project.isMiniumMode()) {
-                setDescriptor = new EndPointSetIntegrateDescriptor(set.getName(),project.getPackageName());
-                context.setMiniumMode(true);
+                clientSetSource = template.render("IntegrationClientSet.ftl", setDescriptor);
+            } else {
+                clientSetSource = template.render("ClientSet.ftl", setDescriptor);
             }
-
-            for (HttpEndpoint endpoint: set.getEndpoints()) {
-
-                try {
-
-                    String clazzName = endpoint.getName();
-                    clazzName = clazzName.substring(0,1).toUpperCase() + clazzName.substring(1);
-                    String responseName = clazzName + "Data";
-
-                    if (endpoint.getResponseBodyView() == ResponseBodyBlankView.class) {
-                        responseName = "Void";
-                    }
-                    buildResponseClass(project,context,responseName,set,endpoint);
-                    DataDescriptor requestor = buildRequestClass(project,context,clazzName,set,endpoint,responseName);
-
-                    setDescriptor.addRequest(endpoint.getName(),clazzName);
-                    if (setDescriptor instanceof EndPointSetIntegrateDescriptor) {
-                        EndPointSetIntegrateDescriptor miniumDesc = (EndPointSetIntegrateDescriptor)setDescriptor;
-                        miniumDesc.addRequestor(requestor);
-                    }
-
-                } catch (Exception e) {
-
-                    logger.error("Failed to generate source : ", e);
-                    emitter.emit(new StatusEvent(
-                            String.format(bundle.getString(LanguageKeys.DLG_CANNOT_WRITE_FILE),endpoint.getName()),
-                            0d,true
-                    ));
-
-                }
-
-            }
-
-            for (DataDescriptor requests : context.getRequests()) {
-
-                File target = new File(setPackage.getAbsolutePath(), requests.getClassName() + ".java");
-
-                emitter.emit(new StatusEvent(bundle.getString(LanguageKeys.WRITE_FILE) + target.getName()));
-
-                try(FileOutputStream fos = new FileOutputStream(target)) {
-                    fos.write(requests
-                            .buildRequestClass(template)
-                            .getBytes(StandardCharsets.UTF_8)
-                    );
-                    sourceClasses.add(target);
-                } catch (Exception e) {
-                    logger.error("Failed to write file : ", e);
-                    emitter.emit(new StatusEvent(
-                            String.format(bundle.getString(LanguageKeys.DLG_CANNOT_WRITE_FILE),target.getName()),
-                            0d,true
-                    ));
-                    return;
-                }
-
-            }
-
-            for (DataDescriptor resps : context.getResponses()) {
-
-                File target = new File(setPackage.getAbsolutePath(), resps.getClassName() + ".java");
-                emitter.emit(new StatusEvent(bundle.getString(LanguageKeys.WRITE_FILE) + target.getName()));
-
-                try(FileOutputStream fos = new FileOutputStream(target)) {
-                    fos.write(resps.buildResponseClass(template)
-                            .getBytes(StandardCharsets.UTF_8)
-                    );
-                    sourceClasses.add(target);
-                } catch (Exception e) {
-                    logger.error("Failed to write file : ", e);
-                    emitter.emit(new StatusEvent(
-                            String.format(bundle.getString(LanguageKeys.DLG_CANNOT_WRITE_FILE),target.getName()),
-                            0d,true
-                    ));
-                    return;
-                }
-
-            }
-
-            String descSetClass = setDescriptor.generateSetClass(template);
             File descSetClassFile = new File(setPackage.getAbsolutePath(),setDescriptor.getClassName() + ".java");
             try (FileOutputStream fos = new FileOutputStream(descSetClassFile)){
-                fos.write(descSetClass.getBytes(StandardCharsets.UTF_8));
-                clientDescriptor.addClientApi(set.getName(), setDescriptor.getClassName());
-                sourceClasses.add(descSetClassFile);
+                fos.write(clientSetSource.getBytes(StandardCharsets.UTF_8));
+                clientDescriptor.addClientApi(endpointSet.getName(), setDescriptor.getClassName());
+                sources.add(descSetClassFile);
             } catch (Exception e) {
                 logger.error("Failed to write file : ", e);
                 emitter.emit(new StatusEvent(
@@ -257,7 +304,7 @@ public class JavaSDKGenerator implements SDKGenerator {
         File projectClassFile = new File(sourceRoot.getAbsolutePath(),clientDescriptor.getClassName() + ".java");
         try(FileOutputStream fos = new FileOutputStream(projectClassFile)) {
             fos.write(clientDescriptor.generateApiClient(template).getBytes(StandardCharsets.UTF_8));
-            sourceClasses.add(projectClassFile);
+            sources.add(projectClassFile);
         } catch (Exception e) {
             logger.error("Failed to write file : ", e);
             emitter.emit(new StatusEvent(
@@ -271,11 +318,10 @@ public class JavaSDKGenerator implements SDKGenerator {
             emitter.emit(new StatusEvent(bundle.getString(LanguageKeys.PACKAGING)));
             try {
                 JavaSDKPackager sdkPackager = new JavaSDKPackager(project,resources.getAssetsFolder(), classVersion);
-                sdkPackager.doPackage(sourceClasses);
+                sdkPackager.doPackage(sources);
             } catch (Exception e) {
                 logger.error("Failed to write file : ", e);
                 emitter.emit(new StatusEvent(bundle.getString(LanguageKeys.DLG_COMPILE_FAILED),0,true));
-                return;
             }
         }
 
@@ -283,84 +329,90 @@ public class JavaSDKGenerator implements SDKGenerator {
         emitter.emit(new StatusEvent(bundle.getString(LanguageKeys.GENERATED),0,true));
     }
 
-    private DataDescriptor buildRequestClass(SDKProject project,DataDescriptorContext context, String className, HttpEndpoints set, HttpEndpoint endpoint, String responseName) {
 
-        List<DataDescriptor> resultList = new ArrayList<>();
-        if (endpoint.getRequestBodyView() == RequestBlankView.class) {
+    private GenerateContext generateEndpointSet(SDKProject project, HttpEndpoints endpointSet) {
 
-            // blank
-            BlankDescriptorGenerator generator = new BlankDescriptorGenerator(project.getPackageName());
-            resultList = generator.generateClasses(className,responseName,set,endpoint,null);
+        GenerateContext context = new GenerateContext();
+        JsonClassParser jsonParser = new JsonClassParser();
+        BlankClassParser blankParser = new BlankClassParser();
+        UrlEncodedClassParser urlEncodedParser = new UrlEncodedClassParser();
 
-        } else if (endpoint.getRequestBodyView() == RequestJsonBodyView.class) {
-            // json
-            ObjectMapper mapper = new ObjectMapper();
-            try {
-                String exampleJsonSource = endpoint.getRequestBodyRaw().get(RequestJsonBodyView.class);
-                if (exampleJsonSource == null) {
-                    exampleJsonSource = "";
-                }
-                JsonNode node = mapper.readTree(exampleJsonSource);
-                JsonDescriptorGenerator generator = new JsonDescriptorGenerator(project.getPackageName());
-                resultList = generator.generateClasses(className,responseName,set,endpoint,node);
+        for (HttpEndpoint endpoint : endpointSet.getEndpoints()) {
 
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+            // generate request class descriptor
+            Class requestViewType = endpoint.getRequestBodyView();
+            String req = endpoint.getRequestBodyRaw().get(requestViewType);
+            if (requestViewType == null ) {
+                continue;
             }
-        } else if (endpoint.getRequestBodyView() == RequestUrlEncodedBodyView.class){
 
-            UrlEncodedDescriptorGenerator generator = new UrlEncodedDescriptorGenerator(project.getPackageName());
-            String source = endpoint.getRequestBodyRaw().get(endpoint.getRequestBodyView());
-            resultList = generator.generateClasses(className,responseName,set,endpoint,source);
+            if (RequestJsonBodyView.class == requestViewType) {
+                try {
 
-        }
+                    if (req == null || req.isBlank()) {
+                        continue;
+                    }
 
-        DataDescriptor result = null;
-        if (resultList != null) {
-            for (DataDescriptor descriptor: resultList) {
-                if (descriptor.isSender()) {
-                    context.addRequest(descriptor);
-                } else {
-                    context.addRequestData(descriptor);
+                    JsonNode node = mapper.readTree(req);
+                    List<DataClassDescriptor> descriptors = jsonParser.parse(
+                            project.getPackageName(),endpoint,endpointSet,true,node);
+                    for (DataClassDescriptor desc : descriptors) {
+                        context.addClassDescriptor(endpoint,desc);
+                    }
+
+                } catch (Exception e) {
+                    logger.error("Error parsing JSON request for endpoint: " + endpoint.getName(), e);
                 }
-                if (descriptor.isSender()) {
-                    result = descriptor;
-                }
-            }
-        }
+            } else if (RequestBlankView.class == requestViewType) {
 
-        return result;
-
-    }
-
-
-    private void buildResponseClass(SDKProject project,DataDescriptorContext context, String className, HttpEndpoints set, HttpEndpoint endpoint) {
-
-        List<DataDescriptor> descriptors = new ArrayList<>();
-
-        if (endpoint.getResponseBodyView() == ResponseBodyJsonView.class) {
-
-            // json
-            ObjectMapper mapper = new ObjectMapper();
-            try {
-
-                JsonNode node = mapper.readTree(
-                        endpoint.getResponseBodyRaw().get(ResponseBodyJsonView.class)
-                );
-
-                JsonDescriptorGenerator generator = new JsonDescriptorGenerator(project.getPackageName());
-                descriptors = generator.generateClasses(className,null,set,endpoint,node);
-
-                for (DataDescriptor descriptor: descriptors) {
-                    context.addResponse(descriptor);
+                List<DataClassDescriptor> descriptors = blankParser.parse(
+                        project.getPackageName(),endpoint,endpointSet,true,req);
+                for (DataClassDescriptor desc : descriptors) {
+                    context.addClassDescriptor(endpoint, desc);
                 }
 
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+            } else if (RequestUrlEncodedBodyView.class == requestViewType) {
+
+                List<DataClassDescriptor> descriptors = urlEncodedParser.parse(
+                        project.getPackageName(),endpoint,endpointSet,true,req);
+                for (DataClassDescriptor desc : descriptors) {
+                    context.addClassDescriptor(endpoint, desc);
+                }
+
             }
 
         }
 
+
+        for (HttpEndpoint endpoint : endpointSet.getEndpoints()) {
+
+            // generate response class descriptor
+            Class responseViewType = endpoint.getResponseBodyView();
+            String resp = endpoint.getResponseBodyRaw().get(responseViewType);
+            if (responseViewType == null || responseViewType == ResponseBodyBlankView.class) {
+                continue;
+            }
+
+            if ( resp == null || resp.isBlank() ) {
+                continue;
+            }
+
+            if (ResponseBodyJsonView.class == responseViewType) {
+                try {
+                    JsonNode node = mapper.readTree(resp);
+                    List<DataClassDescriptor> descriptors = jsonParser.parse(
+                            project.getPackageName(),endpoint,endpointSet,false,node);
+                    for (DataClassDescriptor desc : descriptors) {
+                        context.addClassDescriptor(endpoint, desc);
+                    }
+
+                } catch (Exception e) {
+                    logger.error("Error parsing JSON response for endpoint: " + endpoint.getName(), e);
+                }
+            }
+
+        }
+        return context;
     }
 
 

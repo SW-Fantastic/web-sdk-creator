@@ -1,11 +1,9 @@
-package org.swdc.websdk.core.generator;
-
-import org.swdc.websdk.core.generator.java.JavaSDKTemplate;
+package org.swdc.websdk.core.generator.java;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class EndPointSetDescriptor {
+public class ClientSetDescriptor {
 
     private Map<String,String> requestNamesMap = new HashMap<>();
 
@@ -15,11 +13,12 @@ public class EndPointSetDescriptor {
 
     private String name;
 
-    public EndPointSetDescriptor(String name, String basePackageName) {
+    public ClientSetDescriptor(String name, String basePackageName) {
 
         this.name = name;
         this.className = name.substring(0,1).toUpperCase() + name.substring(1) + "Api";
         this.basePackageName = basePackageName;
+
     }
 
     public String getName() {
@@ -45,5 +44,6 @@ public class EndPointSetDescriptor {
     public String generateSetClass(JavaSDKTemplate template) {
         return template.render("ClientSet.ftl", this);
     }
+
 
 }

@@ -1,6 +1,4 @@
-package org.swdc.websdk.core.generator;
-
-import org.swdc.websdk.core.generator.java.JavaSDKTemplate;
+package org.swdc.websdk.core.generator.java;
 
 import java.util.HashMap;
 import java.util.Map;

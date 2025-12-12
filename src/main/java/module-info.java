@@ -27,6 +27,7 @@ module swdc.sdkdev {
     requires com.fasterxml.jackson.databind;
     requires org.slf4j;
     requires hanlp.portable;
+    requires com.fasterxml.jackson.annotation;
 
     opens org.swdc.websdk.views to
             javafx.graphics,
@@ -61,12 +62,6 @@ module swdc.sdkdev {
             swdc.application.dependency,
             swdc.application.fx;
 
-    opens org.swdc.websdk.core.generator to
-            freemarker;
-
-    opens org.swdc.websdk.core.generator.classes to
-            freemarker;
-
     opens org.swdc.websdk.views.events to
             javafx.fxml,
             javafx.graphics,
@@ -77,6 +72,7 @@ module swdc.sdkdev {
     opens views.main;
     opens views.modal;
     opens lang;
+    opens org.swdc.websdk.core.generator to freemarker, swdc.application.dependency;
 
 
 }
