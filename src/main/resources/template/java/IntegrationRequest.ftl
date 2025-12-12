@@ -1,71 +1,69 @@
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public static class ${className} <#if superClass??>extends ${superClass}</#if> {
+    public static class ${requestClassName} <#if superClass??>extends ${superClass}</#if> {
 
-        <#if sender>
+        <#if requestor>
         private Client client;
 
-        ${className}(Client client) {
+        ${requestClassName}(Client client) {
             this.client = client;
         }
         <#else>
-        public ${className}() {
+        public ${requestClassName}() {
         }
         </#if>
 
-        <#list fieldClassMap.keySet() as fieldKey>
-        @JsonProperty("${fieldKey}")
-        private ${fieldClassMap[fieldKey]} ${fieldNameMap[fieldKey]};
+        <#list requestFields as field>
+        @JsonProperty("${field.propertyName}")
+        private ${field.simpleTypeName} ${field.name};
 
         </#list>
 
-        <#if sender>
-        <#list fieldParamMap.keySet() as fieldKey>
+        <#if requestor>
+        <#list allParams as field>
         @JsonIgnore
-        @WebParam("${fieldKey}")
-        private ${fieldParamMap[fieldKey]} ${fieldNameMap[fieldKey]};
+        @WebParam("${field.propertyName}")
+        private ${field.simpleTypeName} ${field.name};
 
         </#list>
 
-        <#list webHeaders.keySet() as fieldKey>
+        <#list headers as field>
         @JsonIgnore
-        @RequestHeader("${fieldKey}")
-        private String ${fieldNameMap[fieldKey]} = "${webHeaders[fieldKey]}";
+        @RequestHeader("${field.propertyName}")
+        private String ${field.name} = "${field.defaultValue}";
 
         </#list>
         </#if>
 
-        <#list fieldClassMap.keySet() as fieldKey>
-        public ${className} ${fieldNameMap[fieldKey]}(${fieldClassMap[fieldKey]} ${fieldNameMap[fieldKey]}) {
-            this.${fieldNameMap[fieldKey]} = ${fieldNameMap[fieldKey]};
+        <#list requestFields as field>
+        public ${requestClassName} ${field.name}(${field.simpleTypeName} value) {
+            this.${field.name} = value;
             return this;
         }
 
         </#list>
 
-        <#if sender>
-        <#list fieldParamMap.keySet() as fieldKey>
-        public ${className} ${fieldNameMap[fieldKey]}(${fieldParamMap[fieldKey]} ${fieldNameMap[fieldKey]}) {
-            this.${fieldNameMap[fieldKey]} = ${fieldNameMap[fieldKey]};
+        <#if requestor>
+        <#list allParams as field>
+        public ${requestClassName} ${field.name}(${field.simpleTypeName} value) {
+            this.${field.name} = value;
             return this;
         }
 
         </#list>
 
-        <#list webHeaders.keySet() as fieldKey>
-        public ${className} ${fieldNameMap[fieldKey]}(String ${fieldNameMap[fieldKey]}) {
-            this.${fieldNameMap[fieldKey]} = ${fieldNameMap[fieldKey]};
+        <#list headers as field>
+        public ${requestClassName} ${field.name}(${field.simpleTypeName} value) {
+            this.${field.name} = value;
             return this;
         }
 
         </#list>
-
-        public ${targetClassName} send() {
-            return client.send("${targetUrl}", this, <#if contentType??>"${contentType}"<#else>null</#if>, "${method}", ${targetClassName}.class);
+        public ${responseClassName} send() {
+            return client.send("${targetUrl}", this, <#if contentType??>"${contentType}"<#else>null</#if>, "${httpMethod}", ${responseClassName}.class);
         }
 
         public <T> T sendAndCast(Class<T> targetResponseType) {
-            return client.send("${targetUrl}", this, <#if contentType??>"${contentType}"<#else>null</#if>, "${method}", targetResponseType);
+            return client.send("${targetUrl}", this, <#if contentType??>"${contentType}"<#else>null</#if>, "${httpMethod}", targetResponseType);
         }
         </#if>
-
     }

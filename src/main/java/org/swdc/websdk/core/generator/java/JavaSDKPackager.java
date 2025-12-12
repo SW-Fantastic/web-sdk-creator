@@ -64,7 +64,9 @@ public class JavaSDKPackager {
             Path targetClassRootPath = targetClassRoot.toPath();
             FileUtil.clean(targetClassRoot);
 
-            compileSource(sources);
+            List<File> distinctSources = sources.stream()
+                    .distinct().collect(Collectors.toList());
+            compileSource(distinctSources);
 
             File target = new File(project.getSourceFile().getParent(),project.getProjectName() + ".jar");
             if (target.exists()) {
