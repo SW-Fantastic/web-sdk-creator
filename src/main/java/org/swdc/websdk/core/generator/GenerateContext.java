@@ -41,8 +41,12 @@ public class GenerateContext {
 
         structureEquals.add(classDescriptor);
         classDescriptors.removeAll(structureEquals);
-        DataClassDescriptor minLevelCd = classDescriptor;
+        DataClassDescriptor minLevelCd = null;
         for (DataClassDescriptor cd : structureEquals) {
+            if (minLevelCd == null) {
+                minLevelCd = cd;
+                continue;
+            }
             if (cd.getLevel() < minLevelCd.getLevel()) {
                 minLevelCd = cd;
             } else if (cd.getLevel() == minLevelCd.getLevel()) {
@@ -53,6 +57,13 @@ public class GenerateContext {
         }
 
         structureEquals.remove(minLevelCd);
+        for (DataClassDescriptor cd : rewroted.keySet()) {
+            DataClassDescriptor target = rewroted.get(cd);
+            if (structureEquals.contains(target)) {
+                rewroted.put(cd, minLevelCd);
+            }
+        }
+
         for (DataClassDescriptor cd : structureEquals) {
             rewroted.put(cd, minLevelCd);
         }

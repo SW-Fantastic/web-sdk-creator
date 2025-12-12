@@ -98,7 +98,7 @@ public class JsonClassParser extends AbstractClassParser<JsonNode> {
                             fd.setCollection(true);
                             fd.setType(type);
                         } else {
-                            type = generateClassName(fieldName + "Item");
+                            type = generateClassName(typeName + "_" + fieldName + "_Item");
                             if (!doParseJson(item, type, level + 1, result)) {
                                 continue;
                             }
@@ -108,7 +108,7 @@ public class JsonClassParser extends AbstractClassParser<JsonNode> {
 
                     } else if (value.isObject()) {
 
-                        String type = generateClassName(fieldName);
+                        String type = generateClassName(typeName + "_" + fieldName);
                         if (!doParseJson(value, type, level + 1, result)) {
                             continue;
                         }

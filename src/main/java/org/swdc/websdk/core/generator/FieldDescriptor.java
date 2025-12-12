@@ -122,14 +122,21 @@ public class FieldDescriptor {
     }
 
     public String getSimpleTypeName() {
+        String className = null;
         if (reference != null) {
-            return reference.getClassName();
+            className = reference.getClassName();
+        } else {
+            try {
+                className = Class.forName(type).getSimpleName();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
-        try {
-            return Class.forName(type).getSimpleName();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        if (isCollection()) {
+            return "List<" + className + ">";
         }
+        return className;
+
     }
 
 }

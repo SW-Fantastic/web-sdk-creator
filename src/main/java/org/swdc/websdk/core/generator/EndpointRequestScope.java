@@ -93,7 +93,7 @@ public class EndpointRequestScope {
      */
     public List<FieldDescriptor> getRequestFields() {
         return request.getFields().stream()
-                .filter(field -> !field.isQueryString() && !field.isPathVar())
+                .filter(field -> !field.isQueryString() && !field.isPathVar() && !field.isHeader())
                 .collect(Collectors.toList());
     }
 
