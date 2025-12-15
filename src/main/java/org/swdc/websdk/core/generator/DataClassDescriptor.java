@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 该类用于描述一个数据类的结构，包括字段信息、导入的类和包名等。
+ */
 public class DataClassDescriptor {
 
     /**

@@ -10,10 +10,26 @@ import org.swdc.websdk.core.generator.FieldDescriptor;
 
 import java.util.*;
 
+/**
+ * 类解析器，将特定数据结构的声明解析为一个Class描述。
+ * @param <T> 数据结构
+ */
 public class AbstractClassParser<T> {
 
+    /**
+     * 基础包名，所有的类型都以此包名为基础。
+     */
     private String basePackageName;
 
+    /**
+     * 解析数据结构，生成类描述。
+     * @param basePackageName 基础包名，所有的类型都以此包名为基础
+     * @param endpoint  Http接口定义
+     * @param httpEndpointSet Http接口定义集合
+     * @param sender 是否用于发送请求
+     * @param data 数据结构，可以是多种类型，通过泛型T指定。
+     * @return 类描述列表，每个数据结构对应一个类描述。
+     */
     public List<DataClassDescriptor> parse(String basePackageName, HttpEndpoint endpoint, HttpEndpoints httpEndpointSet, boolean sender, T data) {
 
         this.basePackageName = basePackageName;
@@ -26,12 +42,27 @@ public class AbstractClassParser<T> {
         return descriptors;
     }
 
+    /**
+     * 解析数据结构，生成类描述。
+     * 重写此方法实现对泛型T类型的数据结构的解析。
+     * @param data 数据结构，可以是多种类型，通过泛型T指定。
+     * @param endpointSet Http的API接口集合，包含了很多Http接口定义。
+     * @return 类描述列表，每个数据结构对应一个类描述。
+     */
     protected List<DataClassDescriptor> parse(T data, HttpEndpoint endpointSet) {
         return Collections.emptyList();
     }
 
+    /**
+     * 解析完成后，做一些额外的处理，
+     * 追加必要的Web参数字段以及规整类的包名。
+     * @param endpointSet Http的API接口集合，包含了很多Http接口定义。
+     * @param endpoint 当前正在解析的Http接口定义。
+     * @param descriptor 当前正在解析的类描述。
+     */
     protected void afterParse(HttpEndpoints endpointSet, HttpEndpoint endpoint ,DataClassDescriptor descriptor) {
 
+        // 追加必要的导入类。
         List<Class> addedImports = List.of(
                 JsonIgnore.class,
                 JsonProperty.class,
@@ -42,12 +73,15 @@ public class AbstractClassParser<T> {
                 ArrayList.class
         );
 
+        // 规整类的包名。
         descriptor.setPackageName(basePackageName + "." + endpointSet.getName());
+        // 添加必要的Web参数
         descriptor.setTargetUrl(endpoint.getUrl());
-        descriptor.setHttpMethod(endpoint.getMethod().name());
+        descriptor.setHttpMethod(endpoint.getMethod().getValue());
         descriptor.getImportClasses().addAll(addedImports);
 
         List<FieldDescriptor> additionalFields = new ArrayList<>();
+        // 追加Web的QueryString
         List<HttpQueryString> queryStrings = endpoint.getQueryStrings();
         for (HttpQueryString queryString: queryStrings) {
 
@@ -61,6 +95,7 @@ public class AbstractClassParser<T> {
 
         }
 
+        // 追加Web的路径变量字段
         List<HttpPathVar> pathVars = endpoint.getPathVars();
         for (HttpPathVar pathVar: pathVars) {
             FieldDescriptor field = new FieldDescriptor();
@@ -72,6 +107,7 @@ public class AbstractClassParser<T> {
             additionalFields.add(field);
         }
 
+        // 追加HttpHeader字段
         List<HttpHeader> headers = endpoint.getHeaders();
         for (HttpHeader httpHeader : headers) {
             FieldDescriptor field = new FieldDescriptor();
@@ -83,11 +119,15 @@ public class AbstractClassParser<T> {
         }
 
         descriptor.getFields().addAll(additionalFields);
-        descriptor.setTargetUrl(endpoint.getUrl());
 
     }
 
 
+    /**
+     * 生成类名，将下划线转换为驼峰命名法。
+     * @param name 类名或字段名
+     * @return 驼峰命名法命名的类名
+     */
     protected String generateClassName(String name) {
         if (name.contains("_")) {
             StringBuilder sb = new StringBuilder();
@@ -104,6 +144,11 @@ public class AbstractClassParser<T> {
         return name;
     }
 
+    /**
+     * 生成字段名，将下划线转换为驼峰命名法。
+     * @param name 字段名
+     * @return 驼峰命名法命名的字段名
+     */
     protected String generateFieldName(String name) {
 
         String[] parts = null;

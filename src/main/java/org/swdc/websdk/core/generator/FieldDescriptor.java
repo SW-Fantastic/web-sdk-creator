@@ -1,5 +1,8 @@
 package org.swdc.websdk.core.generator;
 
+/**
+ * 封装了单个字段的描述信息，
+ */
 public class FieldDescriptor {
 
     /**
