@@ -4,6 +4,6 @@ import org.apache.http.HttpRequest;
 
 public interface WebCredentials {
 
-    void initialize(HttpRequest request);
+    boolean initialize(HttpRequest request);
 
 }

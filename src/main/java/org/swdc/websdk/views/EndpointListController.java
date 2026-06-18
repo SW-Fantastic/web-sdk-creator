@@ -1,10 +1,11 @@
 package org.swdc.websdk.views;
 
+import jakarta.inject.Inject;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.geometry.Side;
 import javafx.scene.control.*;
-import javafx.scene.input.MouseEvent;
+import javafx.scene.input.*;
 import org.swdc.dependency.annotations.EventListener;
 import org.swdc.dependency.annotations.Prototype;
 import org.swdc.fx.view.ViewController;
@@ -26,6 +27,9 @@ public class EndpointListController extends ViewController<EndpointListView> {
 
     private ContextMenu contextMenu;
 
+    @Inject
+    private DragHolder dragHolder;
+
     @FXML
     private ListView<HttpEndpoint> listView;
 
@@ -34,6 +38,38 @@ public class EndpointListController extends ViewController<EndpointListView> {
 
         listView.setCellFactory(lv -> new EndpointCell());
         listView.setOnMouseClicked(this::changed);
+        listView.setOnDragDetected(event -> {
+            HttpEndpoint endpoint = listView.getSelectionModel().getSelectedItem();
+            if (endpoint == null) {
+                return;
+            }
+            Dragboard dragboard = listView.startDragAndDrop(TransferMode.MOVE);
+            dragHolder.startDrag(HttpEndpoint.class, endpoint,dragboard);
+        });
+
+        /* listView.setOnDragOver(event -> {
+            if (dragHolder.isDragging(HttpEndpoint.class)) {
+                event.acceptTransferModes(TransferMode.MOVE);
+            }
+        });
+
+        listView.setOnDragDropped(event -> {
+            HttpEndpoint endpoint = dragHolder.finishDrag(HttpEndpoint.class);
+            if (endpoint == null) {
+                return;
+            }
+            endpoints.getEndpoints().add(endpoint);
+            event.setDropCompleted(true);
+        }); */
+
+        listView.setOnDragDone(event -> {
+            HttpEndpoint endpoint = dragHolder.getDropped(HttpEndpoint.class);
+            if (endpoint == null) {
+                return;
+            }
+            endpoints.getEndpoints().remove(endpoint);
+            refreshView();
+        });
 
         MenuItem itemRename = new MenuItem(resourceBundle.getString(LanguageKeys.RENAME));
         itemRename.setOnAction(this::onRename);

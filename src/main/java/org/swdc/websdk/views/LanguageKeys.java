@@ -54,6 +54,8 @@ public interface LanguageKeys {
 
     String GENERATED = "app.generate-complete";
 
+    String DLG_INVALID_CONTENT = "app.dlg.generate-failed";
+
     String DLG_PARAM_INVALID="app.dlg.parameter-invalid";
 
     String DLG_NAME_INVALID = "app.dlg.name-invalid";

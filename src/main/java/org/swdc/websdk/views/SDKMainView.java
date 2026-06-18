@@ -6,6 +6,7 @@ import javafx.geometry.Insets;
 import javafx.scene.control.ButtonBase;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.VBox;
 import org.swdc.fx.FXResources;
 import org.swdc.fx.font.FontSize;
@@ -23,6 +24,9 @@ public class SDKMainView extends AbstractView {
 
     @Inject
     private FXResources resources;
+
+    @Inject
+    private DragHolder dragHolder;
 
     @PostConstruct
     public void init() {
@@ -55,6 +59,20 @@ public class SDKMainView extends AbstractView {
         listView.setEndpoints(endpoints);
 
         titledPane.setUserData(endpoints);
+        titledPane.setOnDragOver(e -> {
+            if (dragHolder.isDragging(HttpEndpoint.class)) {
+                e.acceptTransferModes(TransferMode.MOVE);
+            }
+        });
+        titledPane.setOnDragDropped(e -> {
+            HttpEndpoint endpoint = dragHolder.finishDrag(HttpEndpoint.class);
+            if (endpoint != null) {
+                HttpEndpoints theEndpoints = (HttpEndpoints) titledPane.getUserData();
+                theEndpoints.getEndpoints().add(endpoint);
+                e.setDropCompleted(true);
+                listView.setEndpoints(theEndpoints);
+            }
+        });
 
         return titledPane;
     }

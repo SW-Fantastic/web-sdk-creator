@@ -3,12 +3,12 @@ package org.swdc.websdk.views.requests;
 import jakarta.inject.Inject;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
-import javafx.scene.control.ContextMenu;
-import javafx.scene.control.Label;
-import javafx.scene.control.MenuItem;
-import javafx.scene.control.TextArea;
+import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
+import org.fxmisc.richtext.MultiChangeBuilder;
 import org.swdc.dependency.EventEmitter;
 import org.swdc.dependency.annotations.MultipleImplement;
 import org.swdc.dependency.event.AbstractEvent;
@@ -22,6 +22,7 @@ import org.swdc.websdk.views.RequestBodyView;
 import org.swdc.websdk.views.events.ContentChangeEvent;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.ResourceBundle;
 
 @MultipleImplement(RequestBodyView.class)
@@ -66,6 +67,25 @@ public class RequestJsonBodyView implements RequestBodyView, EventEmitter {
 
                 }
             });
+            codeArea.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+                if (event.getCode() == KeyCode.TAB) {
+                    event.consume();
+                    int startParagraph = codeArea.getCaretSelectionBind().getStartParagraphIndex();
+                    int endParagraph = codeArea.getCaretSelectionBind().getEndParagraphIndex();
+                    MultiChangeBuilder builder = codeArea.createMultiChange();
+                    for (int index  = startParagraph; index <= endParagraph; index++) {
+                        if (event.isShiftDown()) {
+                            String lineText = codeArea.getParagraph(index).getText();
+                            if (lineText.startsWith(" ") || lineText.startsWith("\t")) {
+                                builder.deleteText(index,0,index,1);
+                            }
+                        } else {
+                            builder.insertText(index, 0," ");
+                        }
+                    }
+                    builder.commit();
+                }
+            });
             scrollPane = new VirtualizedScrollPane<>(codeArea);
             codeArea.getStyleClass().add("code-area");
             initContextMenu();
@@ -88,6 +108,9 @@ public class RequestJsonBodyView implements RequestBodyView, EventEmitter {
         paste.setGraphic(createIcon("clipboard"));
         paste.setOnAction(e -> {
             codeArea.paste();
+            String text = codeArea.getText();
+            text = text.replace("\t", " ");
+            codeArea.replace(0, text.length(),text,(String) null);
         });
 
         MenuItem undo = new MenuItem();

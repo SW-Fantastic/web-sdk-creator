@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.TimeUnit;
 
 public class Client {
 
@@ -58,7 +59,13 @@ public class Client {
 
     private volatile int maxRetry = 1;
 
+    private volatile int rpm = 100;
+
     private List<Class> retryExceptions = new ArrayList<>();
+
+    private PoolingHttpClientConnectionManager connectionMgr;
+
+    private RateDispatcher rateDispatcher = new RateDispatcher();
 
     public Client(WebCredentials credentials, String baseUrl) {
 
@@ -66,15 +73,16 @@ public class Client {
         this.baseUrl = baseUrl;
         this.mapper = new ObjectMapper();
         this.mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
-        RequestConfig config = RequestConfig.copy(RequestConfig.DEFAULT)
-                .setConnectTimeout(1000 * 15)
-                .setSocketTimeout(1000 * 15)
-                .build();
+        this.connectionMgr = new PoolingHttpClientConnectionManager();
+        this.connectionMgr.setMaxTotal(400);
+        this.connectionMgr.setValidateAfterInactivity(2000);
 
         this.client = HttpClientBuilder.create()
                 .setRetryHandler(this::retryHandler)
-                .setDefaultRequestConfig(config)
+                .setDefaultRequestConfig(config())
+                .setConnectionManager(connectionMgr)
+                .setMaxConnPerRoute(2000)
+                .useSystemProperties()
                 .build();
 
         if(this.baseUrl.endsWith("/")) {
@@ -138,28 +146,47 @@ public class Client {
                     .register("https",new SSLConnectionSocketFactory(context))
                     .build();
 
-            PoolingHttpClientConnectionManager connMgr = new PoolingHttpClientConnectionManager(
+            if (this.connectionMgr != null) {
+                this.connectionMgr.shutdown();
+            }
+            this.connectionMgr = new PoolingHttpClientConnectionManager(
                     factoryRegistry
             );
-
-            RequestConfig config = RequestConfig.copy(RequestConfig.DEFAULT)
-                    .setConnectTimeout(1000 * 15)
-                    .setSocketTimeout(1000 * 15)
-                    .build();
+            this.connectionMgr.setMaxTotal(400);
 
             this.client = HttpClientBuilder.create()
-                    .setDefaultRequestConfig(config)
-                    .setConnectionManager(connMgr)
+                    .setConnectionManager(connectionMgr)
                     .setRetryHandler(this::retryHandler)
+                    .setDefaultRequestConfig(config())
+                    .useSystemProperties()
                     .build();
+
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
 
     }
 
+    public void recycleConnection() {
+        connectionMgr.closeExpiredConnections();
+        if (connectionMgr.getTotalStats().getAvailable() < 100) {
+            connectionMgr.closeIdleConnections(30, TimeUnit.SECONDS);
+        }
+        /*PoolStats stats = connectionMgr.getTotalStats();
+        System.out.println("Pool status: " + stats.toString());*/
+    }
+
+    private RequestConfig config() {
+        return RequestConfig.copy(RequestConfig.DEFAULT)
+                .setConnectTimeout(1000 * 15)
+                .setSocketTimeout(1000 * 15)
+                .setConnectionRequestTimeout(1000 * 15)
+                .build();
+    }
+
     public <T> T send(String url, Object param, String contentType, String method, Class<T> responseType) {
 
+        rateDispatcher.requestPerMinute(rpm);
         Field[] fields = param.getClass().getDeclaredFields();
         Map<String,Object> params = new HashMap<>();
         Map<String,String> headers = new HashMap<>();
@@ -214,40 +241,64 @@ public class Client {
             entityRequest.setEntity(entity);
         }
 
+        if(!cred.initialize(request)) {
+            return null;
+        }
+        CloseableHttpResponse response = null;
         try {
-            cred.initialize(request);
-            CloseableHttpResponse response = client.execute(request);
-            try {
+            response = client.execute(request);
+            StatusLine statusLine = response.getStatusLine();
+            HttpEntity entity = response.getEntity();
 
-                StatusLine statusLine = response.getStatusLine();
-                HttpEntity entity = response.getEntity();
-                if (statusLine.getStatusCode() < 200 && statusLine.getStatusCode() > 299) {
-                    if (statusLine.getStatusCode() == 404) {
-                        return null;
+            if (statusLine.getStatusCode() == 401) {
+
+                if (cred instanceof RefreshableCredentials) {
+                    RefreshableCredentials refreshable = (RefreshableCredentials)cred;
+                    if (refreshable.refresh()) {
+                        try {
+                            if(!cred.initialize(request)) {
+                                return null;
+                            }
+                            response = client.execute(request);
+                            statusLine = response.getStatusLine();
+                            entity = response.getEntity();
+                        } catch (Exception e) {
+                            throw new IllegalStateException(e);
+                        }
                     }
-                    String content = "";
-                    if (entity.getContent() != null) {
-                        content = new String(readAllBytes(entity.getContent()), UTF_8);
-                    }
-                    throw new RuntimeException(statusLine.getStatusCode() + " " + content);
                 }
 
-                if (entity == null) {
-                    return null;
-                }
+            }
+
+            if (statusLine.getStatusCode() == 200) {
+
                 if (responseType == Void.class) {
                     return null;
                 }
+
                 return mapper.readValue(
                         entity.getContent(),responseType
                 );
 
-            } finally {
-                response.close();
+            } else if (statusLine.getStatusCode() == 404) {
+                return null;
+            } else {
+                String content = "";
+                if (entity.getContent() != null) {
+                    content = new String(readAllBytes(entity.getContent()), UTF_8);
+                }
+                throw new IllegalStateException(statusLine.getStatusCode() + " " + content);
             }
 
         } catch (Exception e) {
             throw new RuntimeException(e);
+        } finally {
+            try {
+                if (response != null) {
+                    response.close();
+                }
+            } catch (Exception e) {
+            }
         }
     }
 

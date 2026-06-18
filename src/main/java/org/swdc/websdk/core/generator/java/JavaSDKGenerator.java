@@ -37,10 +37,13 @@ public class JavaSDKGenerator implements SDKGenerator {
 
     private EventEmitter emitter;
 
-    public JavaSDKGenerator(EventEmitter emitter, JavaSDKTemplate template, String classVersion) {
+    private ResourceBundle bundle;
+
+    public JavaSDKGenerator(EventEmitter emitter, JavaSDKTemplate template, ResourceBundle bundle, String classVersion) {
         this.classVersion = classVersion;
         this.template = template;
         this.emitter = emitter;
+        this.bundle = bundle;
     }
 
     @Override
@@ -109,6 +112,24 @@ public class JavaSDKGenerator implements SDKGenerator {
                 "WebCredentials.ftl"
         );
         sourceClasses.add(credentialsSource);
+
+        File refreshableCredentialsSource = new File(sourceRoot.getAbsolutePath(),"RefreshableCredentials.java");
+        FileUtil.generateAndWrite(
+                template,
+                refreshableCredentialsSource,
+                Map.of("basePackageName", project.getPackageName()),
+                "RefreshableCredentials.ftl"
+        );
+        sourceClasses.add(refreshableCredentialsSource);
+
+        File rateDispatcher = new File(sourceRoot.getAbsolutePath(),"RateDispatcher.java");
+        FileUtil.generateAndWrite(
+                template,
+                rateDispatcher,
+                Map.of("basePackageName", project.getPackageName()),
+                "RateDispatcher.ftl"
+        );
+        sourceClasses.add(rateDispatcher);
 
         File clientSource = new File(sourceRoot.getAbsolutePath(),"Client.java");
         FileUtil.generateAndWrite(
@@ -407,6 +428,10 @@ public class JavaSDKGenerator implements SDKGenerator {
                     }
 
                 } catch (Exception e) {
+                    emitter.emit(new StatusEvent(
+                            String.format(bundle.getString(LanguageKeys.DLG_INVALID_CONTENT), endpoint.getName()),
+                            0d,true
+                    ));
                     logger.error("Error parsing JSON response for endpoint: " + endpoint.getName(), e);
                 }
             }

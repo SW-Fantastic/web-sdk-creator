@@ -1,10 +1,12 @@
 package org.swdc.websdk.core.generator.java;
 
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.swdc.dependency.EventEmitter;
 import org.swdc.dependency.annotations.MultipleImplement;
 import org.swdc.dependency.event.AbstractEvent;
 import org.swdc.dependency.event.Events;
+import org.swdc.fx.FXResources;
 import org.swdc.websdk.core.generator.GeneratorFactory;
 import org.swdc.websdk.core.generator.SDKGenerator;
 
@@ -14,9 +16,12 @@ public class JavaSourceGeneratorFactory implements GeneratorFactory, EventEmitte
 
     private Events events;
 
+    @Inject
+    private FXResources resources;
+
     @Override
     public SDKGenerator create() {
-        return new JavaSDKGenerator(this, new JavaSDKTemplate(), null);
+        return new JavaSDKGenerator(this, new JavaSDKTemplate(),resources.getResourceBundle(), null);
     }
 
     @Override

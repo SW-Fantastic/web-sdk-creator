@@ -34,11 +34,16 @@ public class Java11GeneratorFactory implements GeneratorFactory, EventEmitter {
 
     @Override
     public SDKGenerator create() {
-        return new JavaSDKGenerator(this, template, "11");
+        return new JavaSDKGenerator(this, template, resources.getResourceBundle(),"11");
     }
 
     @Override
     public String getName() {
         return "Java11";
+    }
+
+    @Override
+    public String toString() {
+        return getName();
     }
 }

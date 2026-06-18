@@ -24,7 +24,7 @@ public class Java8GeneratorFactory implements GeneratorFactory,EventEmitter {
 
     @Override
     public SDKGenerator create() {
-        return new JavaSDKGenerator(this, template, "1.8");
+        return new JavaSDKGenerator(this, template, resources.getResourceBundle(),"1.8");
     }
 
     @Override
